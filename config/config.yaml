@@ -1,0 +1,118 @@
+# ResQ-Agent Configuration File
+
+# AWS Configuration
+aws:
+  region: us-east-1
+  s3_bucket: resq-agent-data-lake
+  dynamodb:
+    events_table: disaster-events
+    results_table: assessment-results
+  bedrock:
+    model_id: anthropic.claude-3-sonnet-20240229-v1:0
+    knowledge_base_id: ""  # Set your Bedrock KB ID here
+    max_tokens: 4000
+    temperature: 0.3
+
+# API Keys (use environment variables in production)
+api_keys:
+  twitter_bearer_token: ${TWITTER_BEARER_TOKEN}
+  noaa_api_token: ${NOAA_API_TOKEN}
+
+# Data Collection Settings
+data_collection:
+  imagery:
+    days_before_event: 7
+    days_after_event: 7
+    default_radius_km: 50
+    max_images_per_event: 20
+
+  social_media:
+    max_tweets: 100
+    sentiment_threshold: 0.5
+    priority_keywords:
+      - trapped
+      - emergency
+      - help
+      - rescue
+      - urgent
+
+  weather:
+    lookback_days: 7
+    include_forecasts: true
+
+# Agent Settings
+agents:
+  orchestrator:
+    timeout_seconds: 300
+    retry_attempts: 2
+
+  visual_analysis:
+    grid_size: 100
+    severity_threshold: 7.0
+    timeout_seconds: 900
+
+  resource_optimization:
+    optimization_method: highs
+    max_iterations: 1000
+    min_resource_allocation: 0.2
+    max_response_time_hours: 6
+
+  verification:
+    min_confidence_threshold: 0.6
+    weight_visual: 0.35
+    weight_official: 0.40
+    weight_social: 0.15
+    weight_cross_ref: 0.10
+
+# Resource Estimation
+resources:
+  base_multipliers:
+    medical_teams: 15
+    rescue_teams: 10
+    helicopters: 5
+    ambulances: 20
+    supplies_tons: 100
+    personnel: 200
+
+  severity_scaling: true
+  shelter_scaling: true
+
+# Logging
+logging:
+  level: INFO
+  format: json
+  log_to_cloudwatch: true
+  retention_days: 30
+
+# Dashboard
+dashboard:
+  port: 8501
+  theme: light
+  refresh_interval_seconds: 30
+  max_events_display: 100
+
+# Alerts
+alerts:
+  sns_topic_arn: ""  # Set your SNS topic ARN
+  email_notifications: true
+  sms_notifications: false
+  thresholds:
+    high_severity: 8.0
+    low_confidence: 0.5
+    urgent_requests: 10
+
+# Performance
+performance:
+  enable_xray: true
+  enable_metrics: true
+  lambda_memory_mb: 3008
+  lambda_timeout_seconds: 300
+
+# Security
+security:
+  encrypt_at_rest: true
+  encrypt_in_transit: true
+  enable_vpc: false  # Set to true for production
+  vpc_config:
+    subnet_ids: []
+    security_group_ids: []

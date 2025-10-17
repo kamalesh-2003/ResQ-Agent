@@ -1,0 +1,306 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'ResQ-Agent Disaster Response AI Infrastructure'
+
+Parameters:
+  EnvironmentName:
+    Type: String
+    Default: production
+    Description: Environment name (production, staging, development)
+    AllowedValues:
+      - production
+      - staging
+      - development
+
+Resources:
+  # ==================== S3 Buckets ====================
+
+  DisasterDataLake:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub 'resq-agent-data-lake-${AWS::AccountId}'
+      VersioningConfiguration:
+        Status: Enabled
+      LifecycleConfiguration:
+        Rules:
+          - Id: ArchiveOldImagery
+            Status: Enabled
+            Prefix: imagery/
+            Transitions:
+              - TransitionInDays: 30
+                StorageClass: GLACIER
+          - Id: DeleteOldLogs
+            Status: Enabled
+            Prefix: logs/
+            ExpirationInDays: 90
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: true
+        BlockPublicPolicy: true
+        IgnorePublicAcls: true
+        RestrictPublicBuckets: true
+      BucketEncryption:
+        ServerSideEncryptionConfiguration:
+          - ServerSideEncryptionByDefault:
+              SSEAlgorithm: AES256
+      Tags:
+        - Key: Project
+          Value: ResQ-Agent
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ==================== DynamoDB Tables ====================
+
+  DisasterEventTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: disaster-events
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: N
+        - AttributeName: status
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+      GlobalSecondaryIndexes:
+        - IndexName: status-index
+          KeySchema:
+            - AttributeName: status
+              KeyType: HASH
+            - AttributeName: timestamp
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      StreamSpecification:
+        StreamViewType: NEW_AND_OLD_IMAGES
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      Tags:
+        - Key: Project
+          Value: ResQ-Agent
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  AssessmentResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: assessment-results
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: event_id
+          AttributeType: S
+        - AttributeName: assessment_type
+          AttributeType: S
+      KeySchema:
+        - AttributeName: event_id
+          KeyType: HASH
+        - AttributeName: assessment_type
+          KeyType: RANGE
+      Tags:
+        - Key: Project
+          Value: ResQ-Agent
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ==================== IAM Roles ====================
+
+  LambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ResQAgent-Lambda-Role-${EnvironmentName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXRayDaemonWriteAccess
+      Policies:
+        - PolicyName: ResQAgentLambdaPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                  - bedrock:InvokeModelWithResponseStream
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - bedrock-agent-runtime:Retrieve
+                  - bedrock-agent-runtime:RetrieveAndGenerate
+                  - bedrock-agent:InvokeAgent
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - s3:GetObject
+                  - s3:PutObject
+                  - s3:ListBucket
+                Resource:
+                  - !GetAtt DisasterDataLake.Arn
+                  - !Sub '${DisasterDataLake.Arn}/*'
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:Query
+                  - dynamodb:UpdateItem
+                  - dynamodb:Scan
+                Resource:
+                  - !GetAtt DisasterEventTable.Arn
+                  - !Sub '${DisasterEventTable.Arn}/index/*'
+                  - !GetAtt AssessmentResultsTable.Arn
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+              - Effect: Allow
+                Action:
+                  - states:StartExecution
+                Resource: !Sub 'arn:aws:states:${AWS::Region}:${AWS::AccountId}:stateMachine:*'
+
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub 'ResQAgent-StepFunctions-Role-${EnvironmentName}'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: StepFunctionsExecutionPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - lambda:InvokeFunction
+                Resource: !Sub 'arn:aws:lambda:${AWS::Region}:${AWS::AccountId}:function:resq-*'
+              - Effect: Allow
+                Action:
+                  - sns:Publish
+                Resource: '*'
+              - Effect: Allow
+                Action:
+                  - logs:CreateLogDelivery
+                  - logs:GetLogDelivery
+                  - logs:UpdateLogDelivery
+                  - logs:DeleteLogDelivery
+                  - logs:ListLogDeliveries
+                  - logs:PutResourcePolicy
+                  - logs:DescribeResourcePolicies
+                  - logs:DescribeLogGroups
+                Resource: '*'
+
+  # ==================== SNS Topics ====================
+
+  DisasterAlertTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'resq-agent-alerts-${EnvironmentName}'
+      DisplayName: ResQ Agent Disaster Alerts
+      Tags:
+        - Key: Project
+          Value: ResQ-Agent
+        - Key: Environment
+          Value: !Ref EnvironmentName
+
+  # ==================== CloudWatch Log Groups ====================
+
+  DataIngestionLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/resq-data-ingestion
+      RetentionInDays: 30
+
+  VisualAnalysisLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/resq-visual-analysis
+      RetentionInDays: 30
+
+  OrchestratorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/resq-orchestrator
+      RetentionInDays: 30
+
+  ResourceOptimizerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/lambda/resq-resource-optimizer
+      RetentionInDays: 30
+
+  StepFunctionsLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: /aws/stepfunctions/resq-disaster-response
+      RetentionInDays: 30
+
+  # ==================== EventBridge Rule ====================
+
+  DisasterEventRule:
+    Type: AWS::Events::Rule
+    Properties:
+      Name: !Sub 'resq-disaster-event-trigger-${EnvironmentName}'
+      Description: Triggers disaster response workflow on new events
+      EventPattern:
+        source:
+          - custom.resq.disaster
+        detail-type:
+          - Disaster Event Detected
+      State: ENABLED
+      Targets:
+        - Arn: !Ref DisasterResponseStateMachine
+          RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+
+  # ==================== Outputs ====================
+
+Outputs:
+  DataLakeBucketName:
+    Description: S3 Data Lake Bucket Name
+    Value: !Ref DisasterDataLake
+    Export:
+      Name: !Sub '${AWS::StackName}-DataLakeBucket'
+
+  DisasterEventTableName:
+    Description: DynamoDB Disaster Events Table
+    Value: !Ref DisasterEventTable
+    Export:
+      Name: !Sub '${AWS::StackName}-EventTable'
+
+  AssessmentResultsTableName:
+    Description: DynamoDB Assessment Results Table
+    Value: !Ref AssessmentResultsTable
+    Export:
+      Name: !Sub '${AWS::StackName}-AssessmentTable'
+
+  LambdaExecutionRoleArn:
+    Description: Lambda Execution Role ARN
+    Value: !GetAtt LambdaExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-LambdaRole'
+
+  StepFunctionsRoleArn:
+    Description: Step Functions Execution Role ARN
+    Value: !GetAtt StepFunctionsExecutionRole.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-StepFunctionsRole'
+
+  DisasterAlertTopicArn:
+    Description: SNS Topic for Disaster Alerts
+    Value: !Ref DisasterAlertTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-AlertTopic'

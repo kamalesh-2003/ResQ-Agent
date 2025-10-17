@@ -1,0 +1,387 @@
+{
+  "Comment": "ResQ-Agent Disaster Response Orchestration Workflow",
+  "StartAt": "ValidateEvent",
+  "States": {
+    "ValidateEvent": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "resq-validate-event",
+        "Payload": {
+          "event.$": "$"
+        }
+      },
+      "ResultPath": "$.validation",
+      "Next": "IsValidEvent",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.error"
+        }
+      ]
+    },
+
+    "IsValidEvent": {
+      "Type": "Choice",
+      "Choices": [
+        {
+          "Variable": "$.validation.Payload.valid",
+          "BooleanEquals": true,
+          "Next": "ParallelDataCollection"
+        }
+      ],
+      "Default": "NotifyInvalidEvent"
+    },
+
+    "ParallelDataCollection": {
+      "Type": "Parallel",
+      "ResultPath": "$.collectedData",
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "HandleDataCollectionFailure",
+          "ResultPath": "$.collectionError"
+        }
+      ],
+      "Branches": [
+        {
+          "StartAt": "FetchSatelliteImagery",
+          "States": {
+            "FetchSatelliteImagery": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "resq-fetch-imagery",
+                "Payload": {
+                  "event_id.$": "$.event_id",
+                  "location.$": "$.location",
+                  "timestamp.$": "$.timestamp"
+                }
+              },
+              "TimeoutSeconds": 300,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 5,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "FetchFEMAData",
+          "States": {
+            "FetchFEMAData": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "resq-fetch-fema",
+                "Payload": {
+                  "event_id.$": "$.event_id",
+                  "state.$": "$.state",
+                  "event_type.$": "$.event_type"
+                }
+              },
+              "TimeoutSeconds": 60,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 1.5
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "FetchWeatherData",
+          "States": {
+            "FetchWeatherData": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "resq-fetch-weather",
+                "Payload": {
+                  "event_id.$": "$.event_id",
+                  "location.$": "$.location",
+                  "timestamp.$": "$.timestamp"
+                }
+              },
+              "TimeoutSeconds": 60,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 3,
+                  "BackoffRate": 1.5
+                }
+              ],
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "FetchSocialMedia",
+          "States": {
+            "FetchSocialMedia": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "resq-fetch-social",
+                "Payload": {
+                  "event_id.$": "$.event_id",
+                  "location.$": "$.location",
+                  "event_type.$": "$.event_type"
+                }
+              },
+              "TimeoutSeconds": 90,
+              "Retry": [
+                {
+                  "ErrorEquals": ["States.TaskFailed"],
+                  "IntervalSeconds": 3,
+                  "MaxAttempts": 2,
+                  "BackoffRate": 2.0
+                }
+              ],
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "VisualDamageAssessment"
+    },
+
+    "HandleDataCollectionFailure": {
+      "Type": "Pass",
+      "Result": {
+        "message": "Partial data collection failure, proceeding with available data"
+      },
+      "ResultPath": "$.partialData",
+      "Next": "VisualDamageAssessment"
+    },
+
+    "VisualDamageAssessment": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "resq-visual-analysis",
+        "Payload": {
+          "event_id.$": "$.event_id",
+          "imagery_data.$": "$.collectedData[0].Payload"
+        }
+      },
+      "ResultPath": "$.visualAssessment",
+      "TimeoutSeconds": 900,
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.assessmentError"
+        }
+      ],
+      "Next": "BedrockOrchestration"
+    },
+
+    "BedrockOrchestration": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "resq-orchestrator",
+        "Payload": {
+          "event_id.$": "$.event_id",
+          "event_data.$": "$",
+          "visual_assessment.$": "$.visualAssessment.Payload",
+          "collected_data.$": "$.collectedData"
+        }
+      },
+      "ResultPath": "$.orchestrationResult",
+      "TimeoutSeconds": 300,
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 10,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Catch": [
+        {
+          "ErrorEquals": ["States.ALL"],
+          "Next": "NotifyFailure",
+          "ResultPath": "$.orchestrationError"
+        }
+      ],
+      "Next": "ResourceOptimization"
+    },
+
+    "ResourceOptimization": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "resq-resource-optimizer",
+        "Payload": {
+          "event_id.$": "$.event_id",
+          "visual_assessment.$": "$.visualAssessment.Payload",
+          "action_plan.$": "$.orchestrationResult.Payload.action_plan",
+          "available_resources.$": "$.collectedData[1].Payload.resources"
+        }
+      },
+      "ResultPath": "$.resourceAllocation",
+      "TimeoutSeconds": 180,
+      "Retry": [
+        {
+          "ErrorEquals": ["States.TaskFailed"],
+          "IntervalSeconds": 5,
+          "MaxAttempts": 2,
+          "BackoffRate": 2.0
+        }
+      ],
+      "Next": "VerificationAndValidation"
+    },
+
+    "VerificationAndValidation": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::lambda:invoke",
+      "Parameters": {
+        "FunctionName": "resq-verification",
+        "Payload": {
+          "event_id.$": "$.event_id",
+          "visual_assessment.$": "$.visualAssessment.Payload",
+          "social_reports.$": "$.collectedData[3].Payload",
+          "official_reports.$": "$.collectedData[1].Payload"
+        }
+      },
+      "ResultPath": "$.verification",
+      "TimeoutSeconds": 120,
+      "Next": "GenerateReports"
+    },
+
+    "GenerateReports": {
+      "Type": "Parallel",
+      "ResultPath": "$.reports",
+      "Branches": [
+        {
+          "StartAt": "GenerateDashboardData",
+          "States": {
+            "GenerateDashboardData": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "resq-dashboard-generator",
+                "Payload": {
+                  "event_id.$": "$.event_id",
+                  "results.$": "$"
+                }
+              },
+              "End": true
+            }
+          }
+        },
+        {
+          "StartAt": "GeneratePDFReport",
+          "States": {
+            "GeneratePDFReport": {
+              "Type": "Task",
+              "Resource": "arn:aws:states:::lambda:invoke",
+              "Parameters": {
+                "FunctionName": "resq-pdf-generator",
+                "Payload": {
+                  "event_id.$": "$.event_id",
+                  "results.$": "$"
+                }
+              },
+              "End": true
+            }
+          }
+        }
+      ],
+      "Next": "SaveFinalResults"
+    },
+
+    "SaveFinalResults": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::dynamodb:putItem",
+      "Parameters": {
+        "TableName": "assessment-results",
+        "Item": {
+          "event_id": {
+            "S.$": "$.event_id"
+          },
+          "assessment_type": {
+            "S": "COMPLETE"
+          },
+          "timestamp": {
+            "N.$": "States.Format('{}', $$.State.EnteredTime)"
+          },
+          "confidence_score": {
+            "N.$": "States.Format('{}', $.verification.Payload.overall_confidence)"
+          },
+          "status": {
+            "S": "COMPLETED"
+          },
+          "results": {
+            "S.$": "States.JsonToString($)"
+          }
+        }
+      },
+      "ResultPath": "$.dbResult",
+      "Next": "NotifyStakeholders"
+    },
+
+    "NotifyStakeholders": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:ACCOUNT_ID:resq-agent-alerts-production",
+        "Subject": "Disaster Response Assessment Complete",
+        "Message.$": "States.Format('Disaster assessment complete for event {}. Confidence: {}. View dashboard for details.', $.event_id, $.verification.Payload.overall_confidence)"
+      },
+      "Next": "Success"
+    },
+
+    "Success": {
+      "Type": "Succeed"
+    },
+
+    "NotifyInvalidEvent": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:ACCOUNT_ID:resq-agent-alerts-production",
+        "Subject": "Invalid Disaster Event",
+        "Message.$": "States.Format('Invalid disaster event received: {}', $.event_id)"
+      },
+      "Next": "Fail"
+    },
+
+    "NotifyFailure": {
+      "Type": "Task",
+      "Resource": "arn:aws:states:::sns:publish",
+      "Parameters": {
+        "TopicArn": "arn:aws:sns:us-east-1:ACCOUNT_ID:resq-agent-alerts-production",
+        "Subject": "Disaster Response Workflow Failed",
+        "Message.$": "States.Format('Disaster response workflow failed for event {}: {}', $.event_id, $.error.Cause)"
+      },
+      "Next": "Fail"
+    },
+
+    "Fail": {
+      "Type": "Fail",
+      "Cause": "Workflow execution failed"
+    }
+  }
+}
