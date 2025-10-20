@@ -189,7 +189,7 @@ ResQ-Agent/
 ### AWS Bedrock Models
 
 The system uses:
-- **Claude 3 Sonnet** (`anthropic.claude-3-sonnet-20240229-v1:0`) for reasoning and orchestration
+- **Claude Opus 4** (`us.anthropic.claude-opus-4-20250514-v1:0`) for reasoning and orchestration
 - **Vision capabilities** for satellite imagery analysis
 - **Knowledge Bases** (optional) for historical disaster patterns
 

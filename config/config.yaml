@@ -8,7 +8,7 @@ aws:
     events_table: disaster-events
     results_table: assessment-results
   bedrock:
-    model_id: anthropic.claude-3-sonnet-20240229-v1:0
+    model_id: us.anthropic.claude-opus-4-20250514-v1:0
     knowledge_base_id: ""  # Set your Bedrock KB ID here
     max_tokens: 4000
     temperature: 0.3

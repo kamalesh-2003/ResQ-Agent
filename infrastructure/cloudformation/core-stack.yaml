@@ -249,23 +249,6 @@ Resources:
       LogGroupName: /aws/stepfunctions/resq-disaster-response
       RetentionInDays: 30
 
-  # ==================== EventBridge Rule ====================
-
-  DisasterEventRule:
-    Type: AWS::Events::Rule
-    Properties:
-      Name: !Sub 'resq-disaster-event-trigger-${EnvironmentName}'
-      Description: Triggers disaster response workflow on new events
-      EventPattern:
-        source:
-          - custom.resq.disaster
-        detail-type:
-          - Disaster Event Detected
-      State: ENABLED
-      Targets:
-        - Arn: !Ref DisasterResponseStateMachine
-          RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
-
   # ==================== Outputs ====================
 
 Outputs:
