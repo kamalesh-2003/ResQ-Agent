@@ -159,9 +159,9 @@ Output ONLY valid JSON in this exact format:
 }
 """
 
-            # Invoke Bedrock with Nova Canvas (or Claude 3 with vision)
+            # Invoke Bedrock with Claude Opus 4 (with vision)
             response = self.bedrock_client.invoke_model(
-                modelId='anthropic.claude-3-sonnet-20240229-v1:0',
+                modelId='us.anthropic.claude-opus-4-20250514-v1:0',
                 body=json.dumps({
                     'anthropic_version': 'bedrock-2023-05-31',
                     'max_tokens': 4000,

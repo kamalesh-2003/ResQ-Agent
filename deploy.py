@@ -119,10 +119,15 @@ class ResQDeployer:
         build_dir = self.root_dir / 'build'
         build_dir.mkdir(exist_ok=True)
 
-        # Install dependencies to build directory
-        print("Installing dependencies...")
+        # Install minimal Lambda dependencies
+        print("Installing minimal Lambda dependencies...")
+        lambda_requirements = self.root_dir / 'requirements-lambda.txt'
+        if not lambda_requirements.exists():
+            print("Warning: requirements-lambda.txt not found, using requirements.txt")
+            lambda_requirements = self.root_dir / 'requirements.txt'
+
         subprocess.run([
-            'pip', 'install', '-r', str(self.root_dir / 'requirements.txt'),
+            'pip', 'install', '-r', str(lambda_requirements),
             '-t', str(build_dir / 'python')
         ], check=True)
 
@@ -168,14 +173,17 @@ class ResQDeployer:
         """Deploy Lambda functions"""
         print("Deploying Lambda functions...")
 
-        # Get Lambda role ARN from CloudFormation
+        # Get Lambda role ARN and S3 bucket from CloudFormation
         stack_name = f'resq-agent-stack-{self.environment}'
         response = self.cf_client.describe_stacks(StackName=stack_name)
         outputs = response['Stacks'][0].get('Outputs', [])
         role_arn = next((o['OutputValue'] for o in outputs if o['OutputKey'] == 'LambdaExecutionRoleArn'), None)
+        s3_bucket = next((o['OutputValue'] for o in outputs if o['OutputKey'] == 'DataLakeBucketName'), None)
 
         if not role_arn:
             raise Exception("Lambda execution role not found in stack outputs")
+        if not s3_bucket:
+            raise Exception("S3 bucket not found in stack outputs")
 
         lambda_functions = {
             'resq-data-ingestion': 'data_ingestion',
@@ -191,34 +199,36 @@ class ResQDeployer:
             print(f"Deploying {func_name}...")
 
             zip_path = build_dir / f'{zip_name}.zip'
+            s3_key = f'lambda/{zip_name}.zip'
 
-            with open(zip_path, 'rb') as f:
-                zip_content = f.read()
+            # Upload to S3 first
+            print(f"  Uploading {zip_name}.zip to S3...")
+            self.s3_client.upload_file(str(zip_path), s3_bucket, s3_key)
 
             try:
                 # Try to update existing function
                 self.lambda_client.update_function_code(
                     FunctionName=func_name,
-                    ZipFile=zip_content
+                    S3Bucket=s3_bucket,
+                    S3Key=s3_key
                 )
-                print(f"Updated {func_name}")
+                print(f"  Updated {func_name}")
 
             except self.lambda_client.exceptions.ResourceNotFoundException:
                 # Create new function
-                print(f"Creating new function: {func_name}")
+                print(f"  Creating new function: {func_name}")
 
                 self.lambda_client.create_function(
                     FunctionName=func_name,
                     Runtime='python3.11',
                     Role=role_arn,
                     Handler=f'{zip_name}.lambda_handler',
-                    Code={'ZipFile': zip_content},
+                    Code={'S3Bucket': s3_bucket, 'S3Key': s3_key},
                     Timeout=900 if 'visual' in func_name else 300,
                     MemorySize=10240 if 'visual' in func_name else 3008,
                     Environment={
                         'Variables': {
-                            'AWS_REGION': self.region,
-                            'ENVIRONMENT': self.environment
+                            'RESQ_ENVIRONMENT': self.environment
                         }
                     },
                     Tags={
@@ -250,9 +260,10 @@ class ResQDeployer:
         with open(workflow_path, 'r') as f:
             definition = f.read()
 
-        # Replace account ID placeholder
+        # Replace account ID and region placeholders
         account_id = boto3.client('sts').get_caller_identity()['Account']
         definition = definition.replace('ACCOUNT_ID', account_id)
+        definition = definition.replace('us-east-1', self.region)  # Fix hardcoded region
 
         state_machine_name = f'resq-disaster-response-{self.environment}'
 

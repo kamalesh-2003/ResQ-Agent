@@ -1,9 +1,16 @@
 {
   "permissions": {
     "allow": [
-      "Bash(git add:*)",
-      "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(taskkill:*)",
+      "Bash(dir:*)",
+      "Bash(cat:*)",
+      "Bash(git reset HEAD .)",
+      "Bash(git clean -fd)",
+      "Bash(git checkout -b implement-agent)",
+      "Bash(git add -A)",
+      "Bash(FILTER_BRANCH_SQUELCH_WARNING=1 git filter-branch --force --index-filter \"git rm --cached --ignore-unmatch ''build/*.zip''\" --prune-empty --tag-name-filter cat -- --all)",
+      "Bash(rm -rf build/ __pycache__/ analysis_output.txt top_7_disasters_analysis.json nul)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nClean up repository by removing unnecessary files\n\nRemoved:\n- build/ directory (667+ MB of build artifacts and dependencies)\n- __pycache__/ directory (Python cache files)\n- analysis_output.txt (temporary analysis file)\n- top_7_disasters_analysis.json (temporary analysis file)\n- nul (accidental file)\n\nThese files were already in .gitignore but were tracked in git history,\ncausing issues when pushing to GitHub due to file size limits.\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")"
     ],
     "deny": [],
     "ask": []
