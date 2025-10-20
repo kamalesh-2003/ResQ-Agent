@@ -1,18 +1,18 @@
-# 🚨 ResQ-Agent: AI-Powered Disaster Response System
+# ResQ-Agent: AI-Powered Disaster Response System
 
 ResQ-Agent is an advanced disaster response system powered by AWS Bedrock that provides real-time damage assessment, resource optimization, and coordinated emergency response using multiple AI agents.
 
-## 🌟 Features
+## Features
 
-- **🛰️ Satellite Imagery Analysis**: Automated damage assessment using NASA and Sentinel-2 imagery with Bedrock vision models
-- **🤖 Multi-Agent System**: Specialized AI agents for visual analysis, resource optimization, and verification
-- **📊 Real-Time Dashboard**: Streamlit-based monitoring interface with live updates
-- **🔄 Automated Workflow**: AWS Step Functions orchestration for seamless disaster response
-- **📡 Multi-Source Data Integration**: NASA, FEMA, NOAA, and social media data
-- **⚡ Scalable Infrastructure**: Serverless AWS architecture with auto-scaling
-- **🎯 Resource Optimization**: Linear programming and AI-driven resource allocation
+- **Satellite Imagery Analysis**: Automated damage assessment using NASA and Sentinel-2 imagery with Bedrock vision models
+- **Multi-Agent System**: Specialized AI agents for visual analysis, resource optimization, and verification
+- **Real-Time Dashboard**: Streamlit-based monitoring interface with live updates
+- **Automated Workflow**: AWS Step Functions orchestration for seamless disaster response
+- **Multi-Source Data Integration**: NASA, FEMA, NOAA, and social media data
+- **Scalable Infrastructure**: Serverless AWS architecture with auto-scaling
+- **Resource Optimization**: Linear programming and AI-driven resource allocation
 
-## 🏗️ Architecture
+## Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -60,7 +60,7 @@ ResQ-Agent is an advanced disaster response system powered by AWS Bedrock that p
          └─────────────┘
 ```
 
-## 📋 Prerequisites
+## Prerequisites
 
 - AWS Account with appropriate permissions
 - Python 3.9 or higher
@@ -70,7 +70,7 @@ ResQ-Agent is an advanced disaster response system powered by AWS Bedrock that p
   - Twitter/X Bearer Token
   - NOAA API Token
 
-## 🚀 Quick Start
+## Quick Start
 
 ### 1. Clone and Setup
 
@@ -144,7 +144,7 @@ python scripts/test_deployment.py --event-type hurricane --severity 8.5
 python scripts/test_deployment.py --check-execution <execution-arn>
 ```
 
-## 📦 Project Structure
+## Project Structure
 
 ```
 ResQ-Agent/
@@ -184,7 +184,7 @@ ResQ-Agent/
 └── README.md
 ```
 
-## 🔧 Configuration
+## Configuration
 
 ### AWS Bedrock Models
 
@@ -203,7 +203,7 @@ Default Lambda configurations:
 
 Modify in `deploy.py` or CloudFormation template as needed.
 
-## 📊 Usage Examples
+## Usage Examples
 
 ### Trigger a Disaster Response
 
@@ -254,7 +254,7 @@ for item in response['Items']:
     print(f"Buildings Damaged: {results['visual_assessment']['buildings_damaged']}")
 ```
 
-## 🔐 Security Best Practices
+## Security Best Practices
 
 1. **API Keys**: Store in AWS Secrets Manager, not environment variables
 2. **IAM Roles**: Use least-privilege policies
@@ -262,7 +262,7 @@ for item in response['Items']:
 4. **Encryption**: Enable encryption at rest and in transit
 5. **Access Logs**: Enable CloudWatch Logs for all services
 
-## 🧪 Testing
+## Testing
 
 ```bash
 # Run unit tests
@@ -275,7 +275,7 @@ pytest --cov=agents --cov=data_ingestion tests/
 pytest tests/integration/
 ```
 
-## 📈 Monitoring
+## Monitoring
 
 ### CloudWatch Dashboards
 
@@ -292,7 +292,7 @@ Configure SNS alerts for:
 - Low confidence assessments (confidence < 0.5)
 - System failures
 
-## 🛠️ Troubleshooting
+## Troubleshooting
 
 ### Common Issues
 
@@ -326,7 +326,7 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 ```
 
-## 🤝 Contributing
+## Contributing
 
 Contributions are welcome! Please:
 
@@ -336,24 +336,24 @@ Contributions are welcome! Please:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## 📄 License
+## License
 
 This project is licensed under the MIT License - see LICENSE file for details.
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
 - AWS Bedrock team for AI model access
 - NASA GIBS for satellite imagery
 - NOAA for weather data
 - FEMA for emergency response data
 
-## 📞 Support
+## Support
 
 - **Issues**: [GitHub Issues](https://github.com/yourusername/ResQ-Agent/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/yourusername/ResQ-Agent/discussions)
 - **Email**: support@resq-agent.com
 
-## 🗺️ Roadmap
+## Roadmap
 
 - [ ] Add support for Amazon Nova Canvas for image generation
 - [ ] Implement real-time streaming with Kinesis
@@ -363,7 +363,7 @@ This project is licensed under the MIT License - see LICENSE file for details.
 - [ ] Predictive disaster modeling
 - [ ] Drone coordination system
 
-## 📊 Performance
+## Performance
 
 - **Average Response Time**: 2-3 minutes per event
 - **Throughput**: 100+ events per hour
@@ -372,4 +372,4 @@ This project is licensed under the MIT License - see LICENSE file for details.
 
 ---
 
-**Built with ❤️ using AWS Bedrock and modern AI**
+**Built using AWS Bedrock and modern AI**
